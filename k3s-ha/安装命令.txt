@@ -1,0 +1,40 @@
+# 参考1：https://docs.k3s.io/datastore/ha-embedded
+# 参考2：https://kube-vip.io/docs/usage/k3s/
+
+export VIP=192.168.1.233
+export INTERFACE=ens33
+export KVVERSION=v0.7.0
+
+ctr image pull ghcr.io/kube-vip/kube-vip:$KVVERSION; 
+ctr run --rm --net-host ghcr.io/kube-vip/kube-vip:$KVVERSION vip /kube-vip manifest daemonset \
+    --interface $INTERFACE \
+    --address $VIP \
+    --inCluster \
+    --taint \
+    --controlplane \
+    --services \
+    --arp \
+    --leaderElection
+
+mkdir -p /var/lib/rancher/k3s/server/manifests && cp kube-vip/*.yaml /var/lib/rancher/k3s/server/manifests/
+
+# 启动一个k3s-server
+curl -sfL https://get.k3s.io | K3S_TOKEN=W8Zt4xAnaJYNdPh0rBZx sh -s - server \
+    --cluster-init \
+    --tls-san=192.168.1.233 \
+    --disable servicelb
+
+# 另两个k3s-server加入 组成高可用controlplane
+curl -sfL https://get.k3s.io | K3S_TOKEN=W8Zt4xAnaJYNdPh0rBZx sh -s - server \
+    --server https://192.168.1.233:6443 \
+    --tls-san=192.168.1.233 \
+    --disable servicelb
+
+# 启动一个k3s-agent
+curl -sfL https://get.k3s.io | K3S_TOKEN=W8Zt4xAnaJYNdPh0rBZx sh -s - agent --server https://192.168.1.233:6443
+
+# 设置LoadBalancer的可用VIP
+kubectl create configmap -n kube-system kubevip --from-literal range-global=192.168.1.10-192.168.1.80
+
+# 如果上面的命令提示kubevip这个configmap已经存在，可以使用下面的命令进行更新
+kubectl patch configmap kubevip -n kube-system --type merge -p '{"data":{"range-global":"192.168.1.10-192.168.1.80"}}'
