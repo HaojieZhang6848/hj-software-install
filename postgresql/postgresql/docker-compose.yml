@@ -1,0 +1,26 @@
+version: '3'
+services:
+  db:
+    image: postgres:16.2-bookworm
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: Zhj001006
+      POSTGRES_USER: haojiezhang
+    volumes:
+      - data:/var/lib/postgresql/data
+    ports:
+      - "15432:5432"
+    networks:
+      - pg-net
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 9988:8080
+    networks:
+      - pg-net
+volumes:
+  data:
+networks:
+  pg-net:
+    driver: bridge
